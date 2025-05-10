@@ -21,19 +21,25 @@ class AuthProvider extends ChangeNotifier {
 
   // Getters
   User? get user => _user;
+
   bool get isLoading => _isLoading;
+
   String? get errorMessage => _errorMessage;
 
   bool _isInitializing = true;
+
   bool get isInitializing => _isInitializing;
 
   PatientCreate? _userDetect;
+
   PatientCreate? get userDetect => _userDetect;
 
   PatientCreate? _fetchedUser;
+
   PatientCreate? get fetchedUser => _fetchedUser;
 
   Uint8List? _profilePhoto;
+
   Uint8List? get profilePhoto => _profilePhoto;
 
   Future<void> initAuth() async {
@@ -43,13 +49,18 @@ class AuthProvider extends ChangeNotifier {
     final userJson = prefs.getString('user_object');
 
     if (token != null) {
-      final email = prefs.getString('email') ?? '';
-      final role = prefs.getString('role') ?? '';
-      final userId = prefs.getString('user_id') ?? '0';
-
-      if (userJson != null) {
-        _userDetect = PatientCreate.fromJson(json.decode(userJson));
+      // ① If the token is expired, force logout
+      if (JwtDecoder.isExpired(token)) {
+        await logout();
+      } else {
+        // ② Otherwise restore your saved user
+        if (userJson != null) {
+          _userDetect = PatientCreate.fromJson(json.decode(userJson));
+        }
       }
+    } else {
+      // no token at all → not logged in
+      await logout();
     }
     _isInitializing = false;
     await fetchProfilePhoto();
@@ -204,10 +215,12 @@ class AuthProvider extends ChangeNotifier {
   }
 
   ///pass word change
-  Future<Map<String, dynamic>> updatePassword(String currentPassword, String newPassword) async {
+  Future<Map<String, dynamic>> updatePassword(
+      String currentPassword, String newPassword) async {
     try {
       // Call the ApiService's updatePassword method.
-      final response = await _apiService.updatePassword(currentPassword, newPassword);
+      final response =
+          await _apiService.updatePassword(currentPassword, newPassword);
       // Optionally process the response (e.g., refresh token, update local state) if needed.
       // Here we just return the response.
       return response;
@@ -215,6 +228,7 @@ class AuthProvider extends ChangeNotifier {
       throw Exception("Failed to update passwordggggg: ${e.toString()}");
     }
   }
+
   Future<void> uploadProfilePhoto(File imageFile) async {
     try {
       _isLoading = true;
@@ -234,13 +248,18 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-
   /// Logs out the current user.
   Future<void> logout() async {
     _user = null;
+    _fetchedUser = null;
+    _userDetect = null;
+    _profilePhoto = null;
     _errorMessage = null;
-    // Clear SharedPreferences or any stored session info
-    await _clearSession();
+    _isLoading = false;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
     notifyListeners();
   }
 

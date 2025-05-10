@@ -29,7 +29,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool get isConsultationClosed {
     return widget.consultation.etat == EtatConsultation.VALIDE ||
-        widget.consultation.etat == EtatConsultation.RECONSULTATION;
+        widget.consultation.etat == EtatConsultation.RECONSULTATION ||
+        widget.consultation.etat == EtatConsultation.EN_ATTENTE;
   }
 
   @override
@@ -101,9 +102,52 @@ class _ChatScreenState extends State<ChatScreen> {
           },
         ),
         actions: [
-          _appBarIcon("lib/icons/video_call.png"),
-          _appBarIcon("lib/icons/call.png"),
-          _appBarIcon("lib/icons/more.png"),
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Consumer<ChatProvider>(
+              builder: (context, chatProv, _) => ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color.fromARGB(255, 0, 131, 113),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  elevation: 0,
+                ),
+                onPressed: isConsultationClosed || chatProv.isEnding
+                    ? null
+                    : () async {
+                        try {
+                          await chatProv
+                              .endConversation(widget.consultation.id!);
+                          Navigator.of(context)
+                              .pop(true); // signal “refresh” upstream
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Erreur : $e')),
+                          );
+                        }
+                      },
+                child: chatProv.isEnding
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(Colors.white)),
+                      )
+                    : Text(
+                        "Fin",
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+              ),
+            ),
+          ),
         ],
       );
 
@@ -146,8 +190,8 @@ class _ChatScreenState extends State<ChatScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Text(
         widget.consultation.etat == EtatConsultation.VALIDE
-            ? "This consultation is validated. No new messages can be sent."
-            : "This consultation requires a follow-up. Please schedule a new consultation.",
+            ? "Cette consultation est validée. Aucun nouveau message ne peut être envoyé."
+            : "Cette consultation nécessite un suivi. Veuillez prendre rendez-vous pour une nouvelle consultation.",
         style: GoogleFonts.poppins(
           color: Colors.grey,
           fontStyle: FontStyle.italic,

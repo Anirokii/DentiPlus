@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../modals/IntegrityResult.dart';
 import '../modals/TimeSlot.dart';
 import '../modals/diagModal.dart';
 import 'config.dart';
@@ -338,7 +339,7 @@ class ApiService {
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: jsonEncode({ 'doctor_note': doctorNote }),
+      body: jsonEncode({'doctor_note': doctorNote}),
     );
 
     // ** DEBUG LOGGING **
@@ -355,10 +356,8 @@ class ApiService {
 
     // surface the real error:
     throw Exception(
-        'validateConsultation failed (${response.statusCode}): ${response.body}'
-    );
+        'validateConsultation failed (${response.statusCode}): ${response.body}');
   }
-
 
   Future<Diagmodal> markReconsultation(
       int consultationId, String doctorNote) async {
@@ -387,8 +386,7 @@ class ApiService {
 
     // surface the real error:
     throw Exception(
-        'ReConsultation failed (${response.statusCode}): ${response.body}'
-    );
+        'ReConsultation failed (${response.statusCode}): ${response.body}');
   }
 
   // --------------------
@@ -474,11 +472,13 @@ class ApiService {
     }
     return [];
   }
+
   Future<List<Consultation>> getConsultationsByEtat(String etat) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token') ?? '';
 
-    final url = Uri.parse('${Config.baseUrl}/consultation-patient/by-etat/$etat');
+    final url =
+        Uri.parse('${Config.baseUrl}/consultation-patient/by-etat/$etat');
 
     final response = await http.get(
       url,
@@ -521,8 +521,17 @@ class ApiService {
   }
 
   Future<Consultation> finishConsultationChat(int consultationId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token') ?? '';
+
     final url = Uri.parse(Config.finishConsultationUrl(consultationId));
-    final response = await http.post(url);
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token'
+      },
+    );
     if (response.statusCode == 200) {
       return Consultation.fromJson(jsonDecode(response.body));
     }
@@ -548,7 +557,8 @@ class ApiService {
       return data.map((json) => Appointment.fromJson(json)).toList();
     }
 
-    throw Exception('Failed to fetch appointments: ${response.statusCode} - ${response.body}');
+    throw Exception(
+        'Failed to fetch appointments: ${response.statusCode} - ${response.body}');
   }
 
   Future<Appointment> addAppointment(
@@ -559,7 +569,10 @@ class ApiService {
     final url = Uri.parse(Config.addAppointmentUrl(consultationId));
     final response = await http.post(
       url,
-      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token',},
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
       body: jsonEncode(appointmentData),
     );
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -576,7 +589,10 @@ class ApiService {
     final url = Uri.parse(Config.changeAppointmentTimeUrl(appointmentId));
     final response = await http.post(
       url,
-      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token'
+      },
       body: jsonEncode(appointmentData),
     );
     if (response.statusCode == 200) {
@@ -593,7 +609,10 @@ class ApiService {
     final url = Uri.parse(Config.cancelAppointmentUrl(appointmentId));
     final response = await http.post(
       url,
-      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token'
+      },
     );
     if (response.statusCode == 200) {
       return Appointment.fromJson(jsonDecode(response.body));
@@ -611,8 +630,11 @@ class ApiService {
     final formattedDate = DateFormat('yyyy-MM-dd').format(date);
     final response = await http.post(
       url,
-      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-      body: jsonEncode({'date': formattedDate }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token'
+      },
+      body: jsonEncode({'date': formattedDate}),
     );
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -772,5 +794,37 @@ class ApiService {
       return jsonDecode(response.body);
     }
     throw Exception('Failed to diagnose (FR)');
+  }
+
+// --------------------
+// LLM DIAGNOSIS ENDPOINTS (if applicable)
+// --------------------
+
+  Future<IntegrityResult> verifyConsultationIntegrity(
+      int consultationId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token') ?? '';
+
+    final url = Uri.parse('${Config.baseUrl}/verify-integrity/$consultationId');
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> body = jsonDecode(response.body);
+      return IntegrityResult.fromJson(body);
+    } else if (response.statusCode == 404) {
+      throw Exception('Consultation not found (404)');
+    } else {
+      // you can parse error detail if your backend returns one
+      final err =
+          response.body.isNotEmpty ? jsonDecode(response.body)['detail'] : null;
+      throw Exception(
+          'Failed to verify integrity: ${err ?? response.statusCode}');
+    }
   }
 }

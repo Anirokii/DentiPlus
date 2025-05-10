@@ -41,7 +41,7 @@ class _ScheduleTab1State extends State<ScheduleTab3> {
     }
 
     try {
-      final doctor = await _apiService.fetchDoctor(2);
+      final doctor = await _apiService.fetchDoctor(1);
       _doctorCache[appointment.id!] = doctor;
       return doctor;
     } catch (e) {
